@@ -2,15 +2,15 @@
 
 import argparse
 import os
-import numpy as np
-import speech_recognition as sr
-import whisper
-import torch
-
 from datetime import datetime, timedelta
 from queue import Queue
-from time import sleep
 from sys import platform
+from time import sleep
+
+import numpy as np
+import speech_recognition as sr
+import torch
+import whisper
 
 
 def main():
@@ -137,7 +137,6 @@ def main():
     print("\n\nTranscription:")
     for line in transcription:
         print(line)
-
 
 if __name__ == "__main__":
     main()
