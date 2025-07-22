@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import configparser
 import logging
 import os
 import subprocess
@@ -25,12 +26,44 @@ SAMPLE_RATE = 16000
 AUDIO_NORMALIZATION_FACTOR = 32768.0
 SLEEP_INTERVAL = 0.25
 CONSOLE_CLEAR_FALLBACK_LINES = 50
+CONFIG_FILE = "config.ini"
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+def setup_logging(log_level: str = 'INFO') -> None:
+    """Setup logging configuration."""
+    numeric_level = getattr(logging, log_level.upper(), logging.INFO)
+    logging.basicConfig(
+        level=numeric_level,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
+
+
+def load_config() -> configparser.ConfigParser:
+    """Load configuration from file with defaults."""
+    config = configparser.ConfigParser()
+    
+    # Set defaults
+    config['DEFAULT'] = {
+        'model': DEFAULT_MODEL,
+        'non_english': 'false',
+        'energy_threshold': str(DEFAULT_ENERGY_THRESHOLD),
+        'record_timeout': str(DEFAULT_RECORD_TIMEOUT),
+        'phrase_timeout': str(DEFAULT_PHRASE_TIMEOUT),
+        'default_microphone': 'pulse',
+        'output_file': '',
+        'show_confidence': 'false',
+        'log_level': 'INFO'
+    }
+    
+    # Load from file if it exists
+    if os.path.exists(CONFIG_FILE):
+        try:
+            config.read(CONFIG_FILE)
+            logging.info(f"Loaded configuration from {CONFIG_FILE}")
+        except Exception as e:
+            logging.warning(f"Failed to load config file: {e}")
+    
+    return config
 
 
 def clear_console() -> None:
@@ -121,26 +154,41 @@ def display_transcription(transcription: List[str]) -> None:
 
 def main():
     """Main function to run the real-time whisper transcription."""
+    # Load configuration
+    config = load_config()
+    
+    # Setup logging early
+    setup_logging(config.get('DEFAULT', 'log_level', fallback='INFO'))
+    
     parser = argparse.ArgumentParser(
         description="Real-time speech transcription using OpenAI Whisper"
     )
-    parser.add_argument("--model", default=DEFAULT_MODEL, help="Model to use",
-                        choices=["tiny", "base", "small", "medium", "large"])
+    parser.add_argument("--model", default=config.get('DEFAULT', 'model', fallback=DEFAULT_MODEL), 
+                        help="Model to use", choices=["tiny", "base", "small", "medium", "large"])
     parser.add_argument("--non_english", action='store_true',
+                        default=config.getboolean('DEFAULT', 'non_english', fallback=False),
                         help="Don't use the english model.")
-    parser.add_argument("--energy_threshold", default=DEFAULT_ENERGY_THRESHOLD,
+    parser.add_argument("--energy_threshold", 
+                        default=config.getint('DEFAULT', 'energy_threshold', fallback=DEFAULT_ENERGY_THRESHOLD),
                         help="Energy level for mic to detect.", type=int)
-    parser.add_argument("--record_timeout", default=DEFAULT_RECORD_TIMEOUT,
+    parser.add_argument("--record_timeout", 
+                        default=config.getfloat('DEFAULT', 'record_timeout', fallback=DEFAULT_RECORD_TIMEOUT),
                         help="How real time the recording is in seconds.", type=float)
-    parser.add_argument("--phrase_timeout", default=DEFAULT_PHRASE_TIMEOUT,
+    parser.add_argument("--phrase_timeout", 
+                        default=config.getfloat('DEFAULT', 'phrase_timeout', fallback=DEFAULT_PHRASE_TIMEOUT),
                         help="How much empty space between recordings before we "
                              "consider it a new line in the transcription.", type=float)
-    parser.add_argument("--output_file", help="Optional file to save transcription")
+    parser.add_argument("--output_file", 
+                        default=config.get('DEFAULT', 'output_file', fallback=''),
+                        help="Optional file to save transcription")
     parser.add_argument("--show_confidence", action='store_true',
+                        default=config.getboolean('DEFAULT', 'show_confidence', fallback=False),
                         help="Show confidence scores with transcription")
+    parser.add_argument("--config", help="Path to configuration file")
     
     if 'linux' in platform:
-        parser.add_argument("--default_microphone", default='pulse',
+        parser.add_argument("--default_microphone", 
+                            default=config.get('DEFAULT', 'default_microphone', fallback='pulse'),
                             help="Default microphone name for SpeechRecognition. "
                                  "Run this with 'list' to view available Microphones.", type=str)
     args = parser.parse_args()
